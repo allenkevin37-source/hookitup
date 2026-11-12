@@ -139,6 +139,7 @@ function sOnboard(){
     <p class="fine" style="text-align:left;margin:8px 0 0">Nobody sees your answers as a promise. Being honest up front saves everybody a wasted night.</p>
     <p class="err" id="err"></p>
     <button class="btn" id="done">Go to my feed</button>
+    <button class="btn ghost" id="skip" style="margin-top:10px">Skip this, take me to the feed</button>
   </div>`;
 }
 
@@ -339,14 +340,19 @@ function bind(r){
     };
     rd.readAsDataURL(f);
   });
-  document.querySelectorAll('#tags .pill').forEach(p=>p.addEventListener('click',()=>{
+  document.addEventListener('click', function(e){
+    const p = e.target.closest('#tags .pill');
+    if (!p || !db.me) return;
+    e.preventDefault();
     const t = p.dataset.t;
     db.me.intents = db.me.intents || [];
     if (db.me.intents.includes(t)) db.me.intents = db.me.intents.filter(x=>x!==t);
     else db.me.intents.push(t);
     save();
     p.classList.toggle('on');
-  }));
+    toast(db.me.intents.length + ' selected');
+  });
+  on('#skip','click',()=>{ save(); go('feed'); });
   on('#done','click',()=>{
     db.me.bio = $('#bio').value.trim();
     if (!db.me.intents || !db.me.intents.length) db.me.intents = ['Just seeing what happens'];
@@ -379,6 +385,13 @@ function bind(r){
     save(); toast('Account deleted'); go('landing');
   });
 }
+
+window.addEventListener('error', function(ev){
+  const app = document.getElementById('app');
+  if (app && !app.innerHTML.trim()){
+    app.innerHTML = '<div class="screen center"><h1 style="font-size:1.4rem">Something broke</h1><p class="lede">Reload the page. If it keeps happening, text Kevin at 214-862-6442.</p><button class="btn" onclick="location.reload(true)">Reload</button></div>';
+  }
+});
 
 /* ---------- boot ---------- */
 function routeFromHash(){
