@@ -410,7 +410,10 @@ function bind(r){
 window.addEventListener('error', function(ev){
   const app = document.getElementById('app');
   if (app && !app.innerHTML.trim()){
-    app.innerHTML = '<div class="screen center"><h1 style="font-size:1.4rem">Something broke</h1><p class="lede">Reload the page. If it keeps happening, text Kevin at 214-862-6442.</p><button class="btn" onclick="location.reload(true)">Reload</button></div>';
+    const detail = (ev.message || 'unknown') + ' @ ' + (ev.filename || '').split('/').pop() + ':' + (ev.lineno || '?');
+    app.innerHTML = '<div class="screen center"><h1 style="font-size:1.2rem">Startup error</h1>'
+      + '<p class="lede" style="font-size:.8rem;word-break:break-word">' + detail.replace(/[<>&]/g,'') + '</p>'
+      + '<button class="btn" onclick="localStorage.removeItem(\'' + KEY + '\');location.reload()">Reset the app</button></div>';
   }
 });
 
