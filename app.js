@@ -32,6 +32,7 @@ function load(){
   d.likes = d.likes || [];
   d.passes = d.passes || [];
   d.matches = d.matches || [];
+  d.closed = d.closed || [];
   d.profiles = (Array.isArray(d.profiles) && d.profiles.length) ? d.profiles : seedProfiles.slice();
   d.msgs = d.msgs || {};
   if (d.me && !Array.isArray(d.me.intents)) d.me.intents = [];
@@ -184,7 +185,7 @@ function sFeed(){
 }
 
 function sMatches(){
-  const list = db.matches.map(id => db.profiles.find(p=>p.id===id)).filter(Boolean);
+  const list = db.matches.filter(id => !(db.closed||[]).includes(id)).map(id => db.profiles.find(p=>p.id===id)).filter(Boolean);
   return `<div class="screen">
     <div class="headrow"><div class="logo"><i></i>Matches</div></div>
     ${list.length ? `<p class="lede">Tap anyone to open the conversation.</p>
@@ -210,7 +211,14 @@ function sChat(){
     <div class="headrow">
       <a class="link" href="#matches">‹ Matches</a>
       <div class="logo"><i></i>${esc(p.name)}</div>
-      <a class="link" href="#safety" style="font-size:.8rem">Report</a>
+      <a class="link" id="closeBtn" href="#chat" style="font-size:.8rem">Close it</a>
+    </div>
+    <div id="closeSheet" style="display:none;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin:8px 0 12px">
+      <p style="margin:0 0 10px;font-size:.9rem">End it without ghosting. They get one clear, kind message and the thread closes for both of you.</p>
+      <button class="btn small ghost" data-close="I've enjoyed talking, but I don't think we're the right match. Wishing you the best.">Not the right match</button>
+      <button class="btn small ghost" data-close="I met someone and I'm giving that a real shot. Thank you for the conversation.">I met someone</button>
+      <button class="btn small ghost" data-close="I'm going to step away from the app for a while. Nothing to do with you. Take care.">Stepping away</button>
+      <button class="btn small ghost" id="nevermind">Never mind, keep talking</button>
     </div>
     <div class="thread" id="thread">
       ${th.length ? th.map(m=>`<div class="bubble ${m.from==='me'?'me':'them'}">${esc(m.text)}</div>`).join('')
@@ -447,6 +455,21 @@ function bind(r){
     }, 1400);
   };
   on('#send','click',sendMsg);
+  on('#closeBtn','click',e=>{
+    e.preventDefault();
+    const sheet = document.getElementById('closeSheet');
+    if (sheet) sheet.style.display = sheet.style.display === 'none' ? 'block' : 'none';
+  });
+  on('#nevermind','click',()=>{ const s=document.getElementById('closeSheet'); if (s) s.style.display='none'; });
+  document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>{
+    if (!activeChat) return;
+    db.msgs[activeChat] = db.msgs[activeChat] || [];
+    db.msgs[activeChat].push({ from:'me', text: b.dataset.close, t: Date.now() });
+    db.closed = db.closed || [];
+    if (!db.closed.includes(activeChat)) db.closed.push(activeChat);
+    db.matches = db.matches.filter(id=>id!==activeChat);
+    save(); toast('Closed kindly'); activeChat = null; go('matches');
+  }));
   const box = document.getElementById('msg');
   if (box) box.addEventListener('keydown', e=>{ if (e.key === 'Enter'){ e.preventDefault(); sendMsg(); } });
   on('#edit','click',()=>go('onboard'));
