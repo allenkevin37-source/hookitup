@@ -21,11 +21,20 @@ let db = load();
 let route = 'landing';
 
 function load(){
+  let d = null;
   try{
     const raw = JSON.parse(localStorage.getItem(KEY));
-    if (raw && raw.users) return raw;
+    if (raw && Array.isArray(raw.users)) d = raw;
   }catch(e){}
-  return { users:[], me:null, profiles:seedProfiles.slice(), likes:[], matches:[], msgs:{}, seenIntro:false };
+  if (!d) d = { users:[], me:null, profiles:seedProfiles.slice(), likes:[], matches:[], msgs:{}, seenIntro:false };
+  d.users = d.users || [];
+  d.likes = d.likes || [];
+  d.passes = d.passes || [];
+  d.matches = d.matches || [];
+  d.profiles = (Array.isArray(d.profiles) && d.profiles.length) ? d.profiles : seedProfiles.slice();
+  d.msgs = d.msgs || {};
+  if (d.me && !Array.isArray(d.me.intents)) d.me.intents = [];
+  return d;
 }
 function save(){ localStorage.setItem(KEY, JSON.stringify(db)); }
 function uid(){ return 'u' + Math.random().toString(36).slice(2,9); }
@@ -43,9 +52,10 @@ function toast(msg){
   clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove('on'), 2200);
 }
 function go(r){
+  route = r;
+  try { history.replaceState(null, '', '#' + r); } catch(e) { location.hash = r; }
   window.scrollTo(0,0);
-  if (('#'+r) === location.hash){ route = r; render(); }
-  else { location.hash = r; }
+  render();
 }
 
 /* ---------- shared bits ---------- */
@@ -268,6 +278,17 @@ function sLegal(which){
 
 /* ---------- render ---------- */
 function render(){
+  try { renderInner(); }
+  catch (err) {
+    const app = document.getElementById('app');
+    app.innerHTML = '<div class="screen center"><div class="logo"><i></i>Hook It Up</div>'
+      + '<h1 style="font-size:1.4rem;margin-top:12px">That screen hit a bug</h1>'
+      + '<p class="lede">' + esc(err.message) + '</p>'
+      + '<button class="btn" onclick="localStorage.removeItem(\'' + KEY + '\');location.reload()">Reset the app</button>'
+      + '<button class="btn ghost" style="margin-top:10px" onclick="location.hash=\'feed\';location.reload()">Try my feed again</button></div>';
+  }
+}
+function renderInner(){
   const app = document.getElementById('app');
   const loggedIn = !!db.me;
   const r = (loggedIn && ['landing','login','signup'].includes(route)) ? 'feed' : route;
