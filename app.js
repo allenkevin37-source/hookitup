@@ -19,6 +19,7 @@ const seedProfiles = [
 
 let db = load();
 let route = 'landing';
+let activeChat = null;
 
 function load(){
   let d = null;
@@ -186,15 +187,40 @@ function sMatches(){
   const list = db.matches.map(id => db.profiles.find(p=>p.id===id)).filter(Boolean);
   return `<div class="screen">
     <div class="headrow"><div class="logo"><i></i>Matches</div></div>
-    ${list.length ? `<div class="list">${list.map(p=>`
-      <div class="row">
-        <div class="pic" style="${photoStyle(p)}"></div>
-        <div><b>${esc(p.name)}, ${p.age}</b><small>${esc(p.city)} · likes you back</small></div>
-      </div>`).join('')}</div>
-      <button class="btn" id="sayhi">Send a first message</button>
-      <p class="fine">Messaging turns on with the live build.</p>`
-    : `<div class="empty"><h2>No matches yet</h2><p>Keep browsing. When someone likes you back, they land here.</p></div>`}
+    ${list.length ? `<p class="lede">Tap anyone to open the conversation.</p>
+      <div class="list">${list.map(p=>{
+        const th = (db.msgs[p.id]||[]);
+        const last = th.length ? th[th.length-1].text : 'Say something first';
+        return `<a class="row" href="#chat" data-chat="${p.id}" style="text-decoration:none;color:inherit">
+          <div class="pic" style="${photoStyle(p)}"></div>
+          <div style="min-width:0"><b>${esc(p.name)}, ${p.age}</b><small style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(last)}</small></div>
+        </a>`;
+      }).join('')}</div>
+      <p class="fine">These are sample profiles for testing. Real matches show up once the database is live.</p>`
+    : `<div class="empty"><h2>No matches yet</h2><p>Go like somebody. When they like you back, they land here and you can talk.</p>
+       <button class="btn" id="tobrowse">Start browsing</button></div>`}
   </div>${navBar('matches')}`;
+}
+
+function sChat(){
+  const p = db.profiles.find(x=>x.id===activeChat);
+  if (!p) return sMatches();
+  const th = db.msgs[p.id] || [];
+  return `<div class="screen" style="padding-bottom:130px">
+    <div class="headrow">
+      <a class="link" href="#matches">‹ Matches</a>
+      <div class="logo"><i></i>${esc(p.name)}</div>
+      <a class="link" href="#safety" style="font-size:.8rem">Report</a>
+    </div>
+    <div class="thread" id="thread">
+      ${th.length ? th.map(m=>`<div class="bubble ${m.from==='me'?'me':'them'}">${esc(m.text)}</div>`).join('')
+        : `<p class="fine" style="margin:24px 0">No messages yet. A short, specific opener beats "hey" every time.</p>`}
+    </div>
+    <div class="composer">
+      <input id="msg" placeholder="Message ${esc(p.name)}" autocomplete="off">
+      <button id="send" aria-label="Send">Send</button>
+    </div>
+  </div>`;
 }
 
 function sProfile(){
@@ -300,6 +326,7 @@ function renderInner(){
   else if (r === 'onboard') html = sOnboard();
   else if (r === 'feed') html = sFeed();
   else if (r === 'matches') html = sMatches();
+  else if (r === 'chat') html = sChat();
   else if (r === 'profile') html = sProfile();
   else if (r === 'upgrade') html = sUpgrade();
   else if (r === 'safety') html = sSafety();
@@ -384,7 +411,7 @@ function bind(r){
   const like = id => {
     if (!db.likes.includes(id)) db.likes.push(id);
     const target = db.profiles.find(p=>p.id===id);
-    const likedBack = Math.random() > 0.4;
+    const likedBack = true; // sample profiles always match so you can test the chat
     if (likedBack && !db.matches.includes(id)) { db.matches.push(id); save(); toast(`It's a match with ${target.name}`); }
     else { save(); toast('Like sent'); }
     render();
@@ -395,7 +422,33 @@ function bind(r){
   }));
 
   // matches / profile / misc
-  on('#sayhi','click',()=>toast('Messaging turns on with the live build'));
+  document.querySelectorAll('[data-chat]').forEach(el=>el.addEventListener('click',e=>{
+    e.preventDefault(); activeChat = el.dataset.chat; go('chat');
+  }));
+  on('#tobrowse','click',()=>go('feed'));
+  const sendMsg = () => {
+    const box = document.getElementById('msg');
+    const text = (box.value||'').trim();
+    if (!text || !activeChat || !db.me) return;
+    db.msgs[activeChat] = db.msgs[activeChat] || [];
+    db.msgs[activeChat].push({ from:'me', text, t:Date.now() });
+    save(); render();
+    const el = document.getElementById('thread'); if (el) el.scrollTop = el.scrollHeight;
+    // sample profiles answer, so the thread isn't a dead end while testing
+    const p = db.profiles.find(x=>x.id===activeChat);
+    const replies = ["Hey! Good to hear from you. What are you up to this weekend?",
+      "Ha, that's a good opener. Tell me more.",
+      "I'm free Saturday if you want to grab something.",
+      "You're local? That's a nice change."];
+    setTimeout(()=>{
+      db.msgs[activeChat].push({ from:'them', text: replies[Math.floor(Math.random()*replies.length)], t:Date.now() });
+      save();
+      if (route === 'chat') { render(); const t2=document.getElementById('thread'); if (t2) t2.scrollTop = t2.scrollHeight; }
+    }, 1400);
+  };
+  on('#send','click',sendMsg);
+  const box = document.getElementById('msg');
+  if (box) box.addEventListener('keydown', e=>{ if (e.key === 'Enter'){ e.preventDefault(); sendMsg(); } });
   on('#edit','click',()=>go('onboard'));
   on('#upgradeBtn','click',()=>go('upgrade'));
   on('#pay','click',()=>toast('Card payments switch on with Stripe. Nothing charged.'));
@@ -420,14 +473,14 @@ window.addEventListener('error', function(ev){
 /* ---------- boot ---------- */
 function routeFromHash(){
   const h = (location.hash || '').replace('#','');
-  return ['landing','signup','login','onboard','feed','matches','profile','upgrade','safety','terms','privacy'].includes(h) ? h : (db.me ? 'feed' : 'landing');
+  return ['landing','signup','login','onboard','feed','matches','profile','chat','upgrade','safety','terms','privacy'].includes(h) ? h : (db.me ? 'feed' : 'landing');
 }
 window.addEventListener('hashchange', ()=>{
   route = routeFromHash();
   if (route === 'onboard' && !db.me) route = 'landing';
-  if (['feed','matches','profile'].includes(route) && !db.me && !db.users.length) route = 'landing';
+  if (['feed','matches','chat','profile'].includes(route) && !db.me) route = 'landing';
   render();
 });
 route = routeFromHash();
-if ((route==='feed'||route==='matches'||route==='profile') && !db.me) route = 'landing';
+if ((route==='feed'||route==='matches'||route==='chat'||route==='profile') && !db.me) route = 'landing';
 render();
