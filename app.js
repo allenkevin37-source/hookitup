@@ -42,7 +42,11 @@ function toast(msg){
   t.textContent = msg; t.classList.add('on');
   clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove('on'), 2200);
 }
-function go(r){ route = r; window.scrollTo(0,0); render(); }
+function go(r){
+  window.scrollTo(0,0);
+  if (('#'+r) === location.hash){ route = r; render(); }
+  else { location.hash = r; }
+}
 
 /* ---------- shared bits ---------- */
 function photoStyle(p){
@@ -128,10 +132,11 @@ function sOnboard(){
     </div>
     <label for="bio">About you</label>
     <textarea id="bio" maxlength="240" placeholder="What you do, what you're into, what you're actually looking for.">${esc(me.bio||'')}</textarea>
-    <label>What are you here for?</label>
+    <label>What are you open to? Pick as many as you want</label>
     <div id="tags">
-      ${['Dating','Something serious','New friends','Just seeing'].map(t=>`<span class="pill ${me.tag===t?'on':''}" data-t="${t}">${t}</span>`).join('')}
+      ${['Serious relationship','Dating','Friends with benefits','One night stand','New friends','Just seeing what happens'].map(t=>`<span class="pill ${(me.intents||[]).includes(t)?'on':''}" data-t="${t}">${t}</span>`).join('')}
     </div>
+    <p class="fine" style="text-align:left;margin:8px 0 0">Nobody sees your answers as a promise. Being honest up front saves everybody a wasted night.</p>
     <p class="err" id="err"></p>
     <button class="btn" id="done">Go to my feed</button>
   </div>`;
@@ -188,7 +193,7 @@ function sProfile(){
     <div class="card" style="margin-top:12px">
       <div class="photo" style="aspect-ratio:1/1;${photoStyle(me)}"><div class="grad"></div></div>
       <div class="info"><h2>${esc(me.name)}, ${me.age}</h2>
-      <div class="meta">${esc(me.city)} · ${esc(me.tag||'Dating')}</div>
+      <div class="meta">${esc(me.city)} · ${esc((me.intents&&me.intents.length?me.intents.join(', '):'Just seeing what happens'))}</div>
       <p class="bio">${esc(me.bio||'No bio yet. Add one so people have something to reply to.')}</p></div>
     </div>
     <div class="stat"><div><b>${db.likes.length}</b><span>liked</span></div><div><b>${db.matches.length}</b><span>matches</span></div><div><b>0</b><span>reports</span></div></div>
@@ -303,7 +308,7 @@ function bind(r){
     if (a < MIN_AGE) return err.textContent = `You have to be ${MIN_AGE} or older to use Hook It Up.`;
     if (a > 100) return err.textContent = 'Check that date of birth.';
     if (db.users.some(u=>u.email===email)) return err.textContent = 'That email already has an account. Sign in instead.';
-    const u = { id:uid(), name, email, pw, dob, age:a, city:city||'DFW', bio:'', tag:'Dating', photo:'', joined:Date.now() };
+    const u = { id:uid(), name, email, pw, dob, age:a, city:city||'DFW', bio:'', tag:'Dating', intents:[], photo:'', joined:Date.now() };
     db.users.push(u); db.me = u; save();
     go('onboard');
   });
@@ -335,14 +340,17 @@ function bind(r){
     rd.readAsDataURL(f);
   });
   document.querySelectorAll('#tags .pill').forEach(p=>p.addEventListener('click',()=>{
-    db.me.tag = p.dataset.t; save();
-    document.querySelectorAll('#tags .pill').forEach(x=>x.classList.remove('on'));
-    p.classList.add('on');
+    const t = p.dataset.t;
+    db.me.intents = db.me.intents || [];
+    if (db.me.intents.includes(t)) db.me.intents = db.me.intents.filter(x=>x!==t);
+    else db.me.intents.push(t);
+    save();
+    p.classList.toggle('on');
   }));
   on('#done','click',()=>{
-    const bio=$('#bio').value.trim();
-    if (bio.length < 20) return $('#err').textContent = 'Give people one real sentence, at least 20 characters.';
-    db.me.bio = bio; save(); toast('Profile saved'); go('feed');
+    db.me.bio = $('#bio').value.trim();
+    if (!db.me.intents || !db.me.intents.length) db.me.intents = ['Just seeing what happens'];
+    save(); toast('Profile saved'); go('feed');
   });
 
   // feed
